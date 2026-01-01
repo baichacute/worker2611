@@ -1,4 +1,4 @@
-name = "dianji"
+name = "worker2611"
 main ="./index.js"
 compatibility_date="2026-01-01"
 # --- D1 数据库配置 ---
