@@ -1,0 +1,9 @@
+name = "dianji"
+main ="./index.js"
+compatibility_date="2026-01-01"
+# --- D1 数据库配置 ---
+# 【重点】这里的 binding 名字必须和你 index.js 代码里调用的变量名一致（通常是 DB）
+[[d1_databases]]
+binding = "DB"           # 代码里通过 env.DB 调用
+database_name = "hi_db"  # 【改这里】填你在CF里看到的D1数据库名字
+database_id = "2a690ecb-40ef-406c-ba5e-7b6ce7b60850" # 【改这里】填D1数据库的 ID (UUID)
