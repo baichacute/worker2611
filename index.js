@@ -1,4 +1,4 @@
-/*export default {
+export default {
     async fetch(request, env) {
         // 1. 处理路由
         const url = new URL(request.url);
@@ -144,9 +144,9 @@ function buildHtmlPage(visitorId, isReturningVisitor) {
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
         <title>云端计数器</title>
-        <style>*/
+        <style>
             /* 全局样式与渐变背景 */
-            /** { box-sizing: border-box; margin: 0; padding: 0; }
+            * { box-sizing: border-box; margin: 0; padding: 0; }
             body { 
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
                 background: linear-gradient(135deg, #667eea, #764ba2);
@@ -162,8 +162,8 @@ function buildHtmlPage(visitorId, isReturningVisitor) {
             }
             .container { max-width: 500px; width: 100%; }
             
-            *//* 卡片样式 */
-           /* .card { 
+            /* 卡片样式 */
+            .card { 
                 background: rgba(255, 255, 255, 0.1);
                 backdrop-filter: blur(10px);
                 -webkit-backdrop-filter: blur(10px);
@@ -304,159 +304,4 @@ function buildHtmlPage(visitorId, isReturningVisitor) {
         </script>
     </body>
     </html>`;
-}*/
-
-export default {
-    async fetch(request, env) {
-        const url = new URL(request.url);
-        
-        // 路由分发
-        if (url.pathname === '/') {
-            return handleHtmlRequest(request, env);
-        } else if (url.pathname === '/api/data') {
-            return handleDataRequest(request, env);
-        } else if (url.pathname === '/api/click') {
-            return handleClickRequest(request, env);
-        } else {
-            return new Response('Not Found', { status: 404 });
-        }
-    }
-};
-
-// 工具函数：从 Cookie 中获取值
-function getCookieValue(cookieHeader, key) {
-    if (!cookieHeader) return null;
-    const cookies = cookieHeader.split(';').map(cookie => cookie.trim());
-    for (const cookie of cookies) {
-        if (cookie.startsWith(key + '=')) {
-            return cookie.substring(key.length + 1);
-        }
-    }
-    return null;
 }
-
-// 工具函数：生成随机 ID
-function generateRandomId() {
-    return Math.random().toString(36).substring(2) + Date.now().toString(36);
-}
-
-// 处理页面访问 (GET /)
-async function handleHtmlRequest(request, env) {
-    const cookie = request.headers.get('Cookie');
-    let visitorId = getCookieValue(cookie, 'visitor_id');
-    let isNewVisitor = false;
-
-    // 1. 检查访客 ID
-    if (!visitorId) {
-        visitorId = generateRandomId();
-        isNewVisitor = true;
-    }
-
-    // 2. 读取或初始化数据库数据
-    // 使用 INSERT ... ON CONFLICT 来处理新老访客
-    if (isNewVisitor) {
-        // 如果是新访客，尝试插入新记录（如果不存在）或仅增加访问量
-        await env.DB.prepare(
-            `INSERT INTO counters (id, total_visitors, total_clicks) 
-             VALUES (1, 1, 0) 
-             ON CONFLICT(id) DO UPDATE SET total_visitors = total_visitors + 1`
-        ).run();
-    }
-
-    // 3. 获取最新统计数据
-    const { results } = await env.DB.prepare("SELECT total_visitors, total_clicks FROM counters WHERE id = 1").first();
-
-    // 4. 读取个人点击数 (从 Cookie 或默认 0)
-    let userClicks = getCookieValue(cookie, 'user_clicks');
-    if (!userClicks) {
-        userClicks = '0';
-    }
-
-    // 5. 构建 HTML 响应
-    const html = `
-    <!DOCTYPE html>
-    <html>
-    <head><title>Cloudflare Worker 计数器</title></head>
-    <body>
-        <h1>计数器测试</h1>
-        <p>总访问量: <span id="visits">${results.total_visitors}</span></p>
-        <p>总点击量: <span id="clicks">${results.total_clicks}</span></p>
-        <p>你的点击: <span id="myClicks">${userClicks}</span></p>
-        <button onclick="doClick()">点击我</button>
-        <script>
-            async function doClick() {
-                const res = await fetch('/api/click', { method: 'POST' });
-                const data = await res.json();
-                document.getElementById('clicks').textContent = data.total_clicks;
-                document.getElementById('myClicks').textContent = data.user_clicks;
-            }
-        </script>
-    </body>
-    </html>`;
-
-    const response = new Response(html, { 
-        headers: { 'Content-Type': 'text/html' } 
-    });
-
-    // 6. 设置 Cookie (仅在需要时)
-    if (isNewVisitor) {
-        // 设置访客 ID (持久化 1 年)
-        response.headers.append('Set-Cookie', `visitor_id=${visitorId}; Path=/; Max-Age=31536000; HttpOnly; Secure; SameSite=Lax`);
-        // 初始化个人点击数 Cookie
-        response.headers.append('Set-Cookie', `user_clicks=0; Path=/; Max-Age=31536000; SameSite=Lax`);
-    }
-
-    return response;
-}
-
-// 处理获取数据请求 (GET /api/data)
-// (可选接口，如果首页加载慢可以用这个接口异步加载)
-async function handleDataRequest(request, env) {
-    const cookie = request.headers.get('Cookie');
-    const userClicks = getCookieValue(cookie, 'user_clicks') || '0';
-
-    const { results } = await env.DB.prepare("SELECT total_visitors, total_clicks FROM counters WHERE id = 1").first();
-    
-    return new Response(JSON.stringify({
-        total_visitors: results.total_visitors,
-        total_clicks: results.total_clicks,
-        user_clicks: userClicks
-    }), {
-        headers: { 'Content-Type': 'application/json' }
-    });
-}
-
-// 处理点击请求 (POST /api/click)
-async function handleClickRequest(request, env) {
-    const cookie = request.headers.get('Cookie');
-    const visitorId = getCookieValue(cookie, 'visitor_id') || 'unknown';
-
-    let userClicks = parseInt(getCookieValue(cookie, 'user_clicks') || '0');
-    userClicks += 1;
-
-    // 1. 更新数据库总点击量
-    await env.DB.prepare(
-        "UPDATE counters SET total_clicks = total_clicks + 1 WHERE id = 1"
-    ).run();
-
-    // 2. 获取更新后的总数据
-    const { results } = await env.DB.prepare("SELECT total_visitors, total_clicks FROM counters WHERE id = 1").first();
-
-    // 3. 构建响应
-    const responseData = {
-        total_clicks: results.total_clicks,
-        user_clicks: userClicks.toString()
-    };
-
-    const response = new Response(JSON.stringify(responseData), {
-        headers: { 
-            'Content-Type': 'application/json'
-        }
-    });
-
-    // 4. 更新用户的 Cookie (保存个人点击数)
-    response.headers.append('Set-Cookie', `user_clicks=${userClicks}; Path=/; Max-Age=31536000; SameSite=Lax`);
-
-    return response;
-}
-
